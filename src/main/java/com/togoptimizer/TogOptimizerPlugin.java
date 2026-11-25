@@ -673,6 +673,10 @@ public class TogOptimizerPlugin extends Plugin
 	public void onGameTick(GameTick event)
 	{
 		continueHop();
+		if (weeklyReminder.syncOpenJournal())
+		{
+			chat("Synced from your Tears of Guthix quest journal.");
+		}
 		Notification reminder = config.readyReminder();
 		String alert = weeklyReminder.check(reminder.isEnabled());
 		if (alert != null)

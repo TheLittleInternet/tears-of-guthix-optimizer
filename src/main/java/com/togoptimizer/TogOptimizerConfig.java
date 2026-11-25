@@ -247,8 +247,8 @@ public interface TogOptimizerConfig extends Config
 	@ConfigItem(
 		keyName = "readyReminder",
 		name = "Weekly reminder",
-		description = "Sends a RuneLite notification when your weekly wait is over. Use ::togstatus to check "
-			+ "from anywhere or sync your quest journal.",
+		description = "Sends a RuneLite notification when you can play again. Open the Tears of Guthix "
+			+ "quest journal to sync your weekly reset.",
 		position = 9,
 		section = juna
 	)

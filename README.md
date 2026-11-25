@@ -58,11 +58,14 @@ It works alongside RuneLite's built-in Tears of Guthix plugin, so its stream tim
 ## Tracking a previous visit
 
 The plugin records a visit when your character drinks the bowl. If you played on mobile or installed
-the plugin after your last run, open **Quest List → Tears of Guthix**. For a journal showing three
-days and 25,000 XP remaining, enter `::togstatus sync 3 25000`. Use zero for either requirement
-the journal says you have met. If you only know the UTC date of your visit, enter
-`::togstatus last YYYY-MM-DD`. Your character's reminder and XP estimates work with online world
-lookup turned off.
+the plugin after your last run, open **Quest List → Tears of Guthix** on a regular members' world.
+The plugin reads the journal and updates this character's weekly reset and XP or quest point progress.
+You'll see a chat confirmation even if the sidebar is closed. You can open the journal again after
+another mobile visit. Journal sync works with online world lookup and notifications turned off.
+
+You can also enter the remaining days and XP manually with `::togstatus sync 3 25000`, using zero
+for a requirement you've met. If you only know the UTC date of your visit, use
+`::togstatus last YYYY-MM-DD`.
 
 XP previews apply to ordinary OSRS worlds and include skill unlocks, the hard Lumbridge & Draynor
 Diary bonus and the 200 million XP cap. RuneLite reports whole skill XP, so a fractional tie can

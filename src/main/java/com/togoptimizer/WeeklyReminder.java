@@ -7,6 +7,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Locale;
+import java.util.Objects;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import net.runelite.api.ChatMessageType;
@@ -44,7 +45,7 @@ final class WeeklyReminder
 		private static final Summary LOADING = new Summary("Loading character", "Your character is loading. Try again in a moment.");
 		private static final Summary QUEST = new Summary("Quest required", "Complete the Tears of Guthix quest to play.");
 		private static final Summary UNKNOWN = new Summary("Last visit unknown",
-			"Enter ::togstatus sync DAYS XP using the remaining days and XP from your quest journal.");
+			"Open Tears of Guthix in your Quest List to sync your weekly reset.");
 		private static final Summary READY_NOW = new Summary("Ready to play", "Talk to Juna to collect your tears.", null, null, true);
 
 		final String headline;
@@ -93,6 +94,8 @@ final class WeeklyReminder
 	private int questCheckTick;
 	private int sampleXpTick;
 	private boolean readyChat;
+	private String lastJournalText;
+	private boolean journalAnnounced;
 
 	@Inject
 	WeeklyReminder(Client client, ConfigManager config)
@@ -114,6 +117,8 @@ final class WeeklyReminder
 		questCheckTick = -1;
 		sampleXpTick = -1;
 		readyChat = false;
+		lastJournalText = null;
+		journalAnnounced = false;
 	}
 
 	private boolean loadProfile()
@@ -229,6 +234,65 @@ final class WeeklyReminder
 		}
 	}
 
+	/** A journal page can stay open across XP gains or midnight. Apply each snapshot only once. */
+	boolean syncOpenJournal()
+	{
+		String text = TearsJournalReader.read(client);
+		if (text == null)
+		{
+			lastJournalText = null;
+			journalAnnounced = false;
+			return false;
+		}
+		if (!loadProfile() || text.equals(lastJournalText) || !normalMembersWorld()
+			|| client.getOverallExperience() <= 0 || !questFinished())
+		{
+			return false;
+		}
+		TearsJournal.Reading reading = TearsJournal.parse(text);
+		if (reading == null)
+		{
+			lastJournalText = text;
+			return false;
+		}
+		try
+		{
+			saveJournal(reading.daysRemaining, reading.xpRemaining, System.currentTimeMillis());
+		}
+		catch (IllegalArgumentException ex)
+		{
+			// A delayed XP update can temporarily make the reported gain exceed the loaded total.
+			return false;
+		}
+		lastJournalText = text;
+		boolean announce = !journalAnnounced;
+		journalAnnounced = true;
+		return announce;
+	}
+
+	private void saveJournal(int days, @Nullable Integer xpRemaining, long now)
+	{
+		long date = Eligibility.unlockInDays(days, now);
+		if (days == 0 && unlock != null && unlock < date)
+		{
+			// An elapsed wait doesn't tell us which past day it ended.
+			date = unlock;
+		}
+		if (xpRemaining == null)
+		{
+			saveDate(date);
+			return;
+		}
+		Long baseline = Eligibility.journalBaseline(days, xpRemaining, client.getOverallExperience());
+		boolean met = xpRemaining == 0;
+		Integer qp = met ? null : questPoints() + 1;
+		if (!Objects.equals(unlock, date) || !Objects.equals(xpBaseline, baseline)
+			|| !Objects.equals(qpTarget, qp) || confirmed != met)
+		{
+			saveVisit(date, baseline, qp, met);
+		}
+	}
+
 	private void saveDate(long date)
 	{
 		if (unlock == null || unlock != date)
@@ -335,7 +399,7 @@ final class WeeklyReminder
 		}
 		if (unavailable == Summary.UNKNOWN)
 		{
-			return "Your last visit is unknown. " + USAGE;
+			return "Your last visit is unknown. " + unavailable.details;
 		}
 		if (unavailable != null)
 		{
@@ -367,8 +431,7 @@ final class WeeklyReminder
 			{
 				int days = Integer.parseInt(args[1]);
 				int xp = Eligibility.journalXp(args[2]);
-				Long baseline = Eligibility.journalBaseline(days, xp, client.getOverallExperience());
-				saveVisit(Eligibility.unlockInDays(days, now), baseline, xp == 0 ? null : questPoints() + 1, xp == 0);
+				saveJournal(days, xp, now);
 			}
 			else if (args.length == 2 && args[0].equalsIgnoreCase("last"))
 			{
