@@ -32,6 +32,7 @@ final class WeeklyReminder
 	private static final String QP = "qpNeededToReturn";
 	private static final String CONFIRMED = "confirmedUnlock";
 	private static final String NOTICE = "lastReadyNoticeDay";
+	private static final String UPDATED = "resetUpdatedAt";
 	private static final String READY = "You can play Tears of Guthix now.";
 	private static final String USAGE = "Use ::togstatus, ::togstatus sync DAYS XP (both remaining in your quest journal), or ::togstatus last YYYY-MM-DD (UTC).";
 
@@ -45,40 +46,46 @@ final class WeeklyReminder
 		private static final Summary LOADING = new Summary("Loading character", "Your character is loading. Try again in a moment.");
 		private static final Summary QUEST = new Summary("Quest required", "Complete the Tears of Guthix quest to play.");
 		private static final Summary UNKNOWN = new Summary("Last visit unknown",
-			"Open Tears of Guthix in your Quest List to sync your weekly reset.");
-		private static final Summary READY_NOW = new Summary("Ready to play", "Talk to Juna to collect your tears.", null, null, true);
+			"Your last visit hasn't been recorded.", null, null, false, true, null);
 
 		final String headline;
 		final String details;
 		@Nullable final String resetTime;
 		@Nullable final String resetUtc;
 		final boolean ready;
+		final boolean canRefresh;
+		@Nullable final Long updatedAt;
 
 		private Summary(String headline, String details)
 		{
-			this(headline, details, null, null, false);
+			this(headline, details, null, null, false, false, null);
 		}
 
-		private Summary(String headline, String details, @Nullable String resetTime, @Nullable String resetUtc, boolean ready)
+		private Summary(String headline, String details, @Nullable String resetTime, @Nullable String resetUtc,
+			boolean ready, boolean canRefresh, @Nullable Long updatedAt)
 		{
 			this.headline = headline;
 			this.details = details;
 			this.resetTime = resetTime;
 			this.resetUtc = resetUtc;
 			this.ready = ready;
+			this.canRefresh = canRefresh;
+			this.updatedAt = updatedAt;
 		}
 
-		static Summary forVisit(long unlock, long now, @Nullable String needed, ZoneId localZone)
+		static Summary forVisit(long unlock, long now, @Nullable String needed, ZoneId localZone, @Nullable Long updatedAt)
 		{
 			if (now >= unlock)
 			{
 				// Login chat and a journal showing zero days only establish that the wait has already elapsed.
-				return needed == null ? READY_NOW : new Summary("Weekly wait complete", needed + ".");
+				return needed == null
+					? new Summary("Ready to play", "Talk to Juna to collect your tears.", null, null, true, true, updatedAt)
+					: new Summary("Weekly wait complete", needed + ".", null, null, false, true, updatedAt);
 			}
 			Instant reset = Instant.ofEpochMilli(unlock);
 			return new Summary("Resets in " + Eligibility.formatRemaining(unlock - now),
 				needed == null ? "XP or quest point requirement met." : needed + ".",
-				LOCAL.format(reset.atZone(localZone)), UTC.format(reset), false);
+				LOCAL.format(reset.atZone(localZone)), UTC.format(reset), false, true, updatedAt);
 		}
 	}
 
@@ -90,6 +97,7 @@ final class WeeklyReminder
 	private Integer qpTarget;
 	private boolean confirmed;
 	private Long lastNotice;
+	private Long updatedAt;
 	private boolean questComplete;
 	private int questCheckTick;
 	private int sampleXpTick;
@@ -113,6 +121,7 @@ final class WeeklyReminder
 		qpTarget = null;
 		confirmed = false;
 		lastNotice = null;
+		updatedAt = null;
 		questComplete = false;
 		questCheckTick = -1;
 		sampleXpTick = -1;
@@ -140,6 +149,7 @@ final class WeeklyReminder
 			qpTarget = config.getRSProfileConfiguration(GROUP, QP, Integer.class);
 			confirmed = unlock != null && unlock.equals(config.getRSProfileConfiguration(GROUP, CONFIRMED, Long.class));
 			lastNotice = config.getRSProfileConfiguration(GROUP, NOTICE, Long.class);
+			updatedAt = config.getRSProfileConfiguration(GROUP, UPDATED, Long.class);
 		}
 		return true;
 	}
@@ -183,6 +193,7 @@ final class WeeklyReminder
 			}
 			readyChat = false;
 			questComplete = true;
+			recordUpdate(now);
 		}
 		int tick = client.getTickCount();
 		if (sampleXpTick >= 0 && tick >= sampleXpTick)
@@ -220,7 +231,9 @@ final class WeeklyReminder
 	{
 		if (loadProfile() && normalMembersWorld())
 		{
-			saveVisit(Eligibility.unlockAfterGame(System.currentTimeMillis()), null, questPoints() + 1, false);
+			long now = System.currentTimeMillis();
+			saveVisit(Eligibility.unlockAfterGame(now), null, questPoints() + 1, false);
+			recordUpdate(now);
 			// The reward XP is applied after the drinking animation starts.
 			sampleXpTick = client.getTickCount() + 3;
 		}
@@ -230,7 +243,9 @@ final class WeeklyReminder
 	{
 		if (days >= 0 && days <= Eligibility.DAYS && loadProfile() && normalMembersWorld())
 		{
-			saveDate(Eligibility.unlockInDays(days, System.currentTimeMillis()));
+			long now = System.currentTimeMillis();
+			saveDate(Eligibility.unlockInDays(days, now));
+			recordUpdate(now);
 		}
 	}
 
@@ -257,7 +272,9 @@ final class WeeklyReminder
 		}
 		try
 		{
-			saveJournal(reading.daysRemaining, reading.xpRemaining, System.currentTimeMillis());
+			long now = System.currentTimeMillis();
+			saveJournal(reading.daysRemaining, reading.xpRemaining, now);
+			recordUpdate(now);
 		}
 		catch (IllegalArgumentException ex)
 		{
@@ -328,6 +345,12 @@ final class WeeklyReminder
 		}
 	}
 
+	private void recordUpdate(long now)
+	{
+		updatedAt = now;
+		config.setRSProfileConfiguration(GROUP, UPDATED, now);
+	}
+
 	private int questPoints()
 	{
 		return client.getVarpValue(VarPlayerID.QP);
@@ -386,7 +409,31 @@ final class WeeklyReminder
 	{
 		Summary unavailable = unavailable();
 		return unavailable != null ? unavailable : Summary.forVisit(unlock, System.currentTimeMillis(),
-			progressRequirement(), ZoneId.systemDefault());
+			progressRequirement(), ZoneId.systemDefault(), updatedAt);
+	}
+
+	@Nullable
+	String loginMessage()
+	{
+		Summary reset = summary();
+		if (!reset.canRefresh)
+		{
+			return null;
+		}
+		if (reset == Summary.UNKNOWN)
+		{
+			return "Open Tears of Guthix in your Quest List to sync your weekly reset.";
+		}
+		if (reset.ready)
+		{
+			return READY;
+		}
+		if (reset.resetTime == null)
+		{
+			return "Your Tears of Guthix wait is over. " + reset.details;
+		}
+		return "Tears of Guthix " + reset.headline.toLowerCase(Locale.ENGLISH)
+			+ " (" + reset.resetTime + "). " + reset.details;
 	}
 
 	@Nullable
@@ -399,7 +446,7 @@ final class WeeklyReminder
 		}
 		if (unavailable == Summary.UNKNOWN)
 		{
-			return "Your last visit is unknown. " + unavailable.details;
+			return "Your last visit is unknown. Open Tears of Guthix in your Quest List to sync your weekly reset.";
 		}
 		if (unavailable != null)
 		{
@@ -446,6 +493,7 @@ final class WeeklyReminder
 			{
 				return USAGE;
 			}
+			recordUpdate(now);
 			return "Saved. " + status();
 		}
 		catch (DateTimeException | IllegalArgumentException ex)

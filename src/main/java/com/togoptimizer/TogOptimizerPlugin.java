@@ -140,6 +140,8 @@ public class TogOptimizerPlugin extends Plugin
 	@Inject
 	private WeeklyReminder weeklyReminder;
 
+	private final LoginReminder loginReminder = new LoginReminder();
+
 	@Inject
 	private BowlReward bowlReward;
 
@@ -265,6 +267,7 @@ public class TogOptimizerPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		loginReminder.start(client.getGameState());
 		sidebar = new TearsPanel(() -> clientThread.invokeLater(this::refreshSidebar));
 		navigation = NavigationButton.builder()
 			.tooltip("Tears of Guthix Optimizer")
@@ -334,6 +337,7 @@ public class TogOptimizerPlugin extends Plugin
 	public void onGameStateChanged(GameStateChanged event)
 	{
 		GameState state = event.getGameState();
+		loginReminder.onGameStateChanged(state);
 		if (state == GameState.LOGIN_SCREEN || state == GameState.HOPPING || state == GameState.CONNECTION_LOST)
 		{
 			clearVisitSession();
@@ -372,7 +376,7 @@ public class TogOptimizerPlugin extends Plugin
 		TearsPanel panel = sidebar;
 		if (panel != null)
 		{
-			SwingUtilities.invokeLater(() -> panel.update(WeeklyReminder.Summary.NO_PROFILE, null));
+			SwingUtilities.invokeLater(() -> panel.update(WeeklyReminder.Summary.NO_PROFILE, null, List.of()));
 		}
 	}
 
@@ -388,7 +392,8 @@ public class TogOptimizerPlugin extends Plugin
 			&& client.getWorldType().contains(net.runelite.api.WorldType.MEMBERS);
 		boolean live = canPreview && playerInRoom() && client.getVarbitValue(VarbitID.DTTD_COLLECTING_TEARS) == 0;
 		BowlReward.Estimate estimate = canPreview ? bowlReward.projection(live, null, false) : null;
-		SwingUtilities.invokeLater(() -> panel.update(reset, estimate));
+		List<BowlHistory.Entry> history = reset.canRefresh ? bowlReward.history() : List.of();
+		SwingUtilities.invokeLater(() -> panel.update(reset, estimate, history));
 	}
 
 	@Subscribe
@@ -673,15 +678,21 @@ public class TogOptimizerPlugin extends Plugin
 	public void onGameTick(GameTick event)
 	{
 		continueHop();
+		bowlReward.checkReward();
 		if (weeklyReminder.syncOpenJournal())
 		{
 			chat("Synced from your Tears of Guthix quest journal.");
 		}
 		Notification reminder = config.readyReminder();
 		String alert = weeklyReminder.check(reminder.isEnabled());
+		String login = loginReminder.check(config.loginResetFrequency(), client, configManager, weeklyReminder);
 		if (alert != null)
 		{
 			notifier.notify(reminder, alert);
+		}
+		else if (login != null)
+		{
+			notifier.notify(Notification.ON, login);
 		}
 		refreshSidebar();
 		// The summary comes as the game's time runs out, while the player is led out of the room

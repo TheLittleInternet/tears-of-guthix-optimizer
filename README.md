@@ -12,10 +12,15 @@ whether the world has the best stream order, when to enter, and when you can pla
 
 ## Features
 
-- **Sidebar.** Click the blue stream icon to see the next reset in your local time, the skill Juna
-  would train and the estimated XP. Hover over the reset date for UTC. During a run the estimate
-  follows your actual bowl. Before a run it uses your last bowl, or a clearly labelled 100-tear
-  example if the count is unknown. Edit **Tears** to try a different amount.
+- **Sidebar.** Click the blue stream icon to see your next reset, when its data was last updated,
+  and the skill and XP predicted for your next bowl. Times are local. Hover over the reset date
+  for UTC. Open **Quest List → Tears of Guthix** to refresh the data, even if the date is unchanged.
+- **Bowl reward and history.** Before a run, the estimate uses the tears from your last recorded
+  bowl and the rate for your current lowest eligible skill. If only the last XP award is available,
+  it uses that amount as a guide. During a run the estimate follows your live bowl. Use the
+  history dropdown to see the date, skill and XP of earlier runs recorded on this character.
+  Older installations that saved only a tear count can use that count for the estimate. Recording
+  the actual XP and skill starts with runs seen by this version.
 - **Best wall.** Outlines the stream to collect from, worked out from where every stream is and when
   each one moves next.
 - **Wait.** When staying put is better, your wall is outlined in yellow with a countdown of the ticks
@@ -37,6 +42,11 @@ whether the world has the best stream order, when to enter, and when you can pla
 - **Weekly reminder** (off by default). Turn this on in the Juna settings for a RuneLite notification
   when you can play again. Enter `::togstatus` anywhere to check your character's weekly wait and XP
   or quest point progress.
+- **Reset notification on login** (off by default). Under **Juna**, choose **Once per day** for
+  the first login per character each UTC day, or **Every login**. The notification includes your
+  reset time and remaining requirements. With no saved reset, it prompts you to open the journal.
+  World hops keep the same login. To see desktop alerts while the game has focus, enable
+  **Send notifications when focused** in RuneLite's notification settings.
 - **XP reward.** Shows the skill Juna would train and the XP per tear. After a tracked run it estimates
   the reward for matching your previous bowl if the final count was clear. During a run it uses the
   tears currently in your bowl.

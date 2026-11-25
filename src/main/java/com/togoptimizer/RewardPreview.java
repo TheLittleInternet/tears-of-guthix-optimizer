@@ -7,6 +7,7 @@ package com.togoptimizer;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.Set;
 import java.util.function.ToIntFunction;
 import javax.annotation.Nullable;
 import net.runelite.api.Client;
@@ -31,6 +32,7 @@ final class RewardPreview
 		Skill.MINING, Skill.SMITHING, Skill.FISHING, Skill.COOKING, Skill.FIREMAKING, Skill.WOODCUTTING,
 		Skill.FLETCHING, Skill.SLAYER, Skill.FARMING, Skill.CONSTRUCTION, Skill.HUNTER, Skill.SAILING
 	};
+	static final Set<Skill> REWARD_SKILLS = Set.of(TIE_ORDER);
 
 	final Skill skill;
 	private final int xpToCap;
@@ -61,6 +63,12 @@ final class RewardPreview
 		{
 			return null;
 		}
+		return select(client::getSkillExperience, lockedSkills(client),
+			client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_HARD_COMPLETE) > 0);
+	}
+
+	static EnumSet<Skill> lockedSkills(Client client)
+	{
 		EnumSet<Skill> locked = EnumSet.noneOf(Skill.class);
 		if (Quest.DRUIDIC_RITUAL.getState(client) != QuestState.FINISHED)
 		{
@@ -78,8 +86,7 @@ final class RewardPreview
 		{
 			locked.add(Skill.CONSTRUCTION);
 		}
-		return select(client::getSkillExperience, locked,
-			client.getVarbitValue(VarbitID.LUMBRIDGE_DIARY_HARD_COMPLETE) > 0);
+		return locked;
 	}
 
 	@Nullable
@@ -116,6 +123,37 @@ final class RewardPreview
 		}
 		long bowlXp = (long) hundredthsPerTear * tears / 100;
 		return (int) Math.min(xpToCap, bowlXp);
+	}
+
+	int capAward(int xp)
+	{
+		return Math.min(xpToCap, xp);
+	}
+
+	/** A whole-XP change can differ by one when the bowl or starting XP contains a fraction. */
+	boolean matchesObserved(int xp, @Nullable Integer tears, int maxTears)
+	{
+		if (xp <= 0 || xp > xpToCap)
+		{
+			return false;
+		}
+		// One quest point buys one tick, which can award at most one tear.
+		if (tears == null && xp > ((long) maxTears * hundredthsPerTear + 99) / 100)
+		{
+			return false;
+		}
+		if (tears == null && xp == xpToCap)
+		{
+			return true;
+		}
+		// When the final counter was cleared, still require a gain consistent with a whole number of tears.
+		int count = tears != null ? tears : (int) Math.round((double) xp * 100 / hundredthsPerTear);
+		if (count <= 0)
+		{
+			return false;
+		}
+		long hundredths = (long) count * hundredthsPerTear;
+		return xp == xpFor(count) || (hundredths % 100 != 0 && xp == hundredths / 100 + 1);
 	}
 
 	/** Displayable XP rate for one tear, including the diary bonus and remaining capacity. */
