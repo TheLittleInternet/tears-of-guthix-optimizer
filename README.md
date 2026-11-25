@@ -12,6 +12,10 @@ whether the world has the best stream order, when to enter, and when you can pla
 
 ## Features
 
+- **Sidebar.** Click the blue stream icon to see the next reset in your local time, the skill Juna
+  would train and the estimated XP. Hover over the reset date for UTC. During a run the estimate
+  follows your actual bowl. Before a run it uses your last bowl, or a clearly labelled 100-tear
+  example if the count is unknown. Edit **Tears** to try a different amount.
 - **Best wall.** Outlines the stream to collect from, worked out from where every stream is and when
   each one moves next.
 - **Wait.** When staying put is better, your wall is outlined in yellow with a countdown of the ticks

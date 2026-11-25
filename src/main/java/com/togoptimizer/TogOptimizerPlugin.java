@@ -11,6 +11,7 @@ import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
+import javax.swing.SwingUtilities;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
@@ -62,10 +63,13 @@ import net.runelite.client.input.KeyManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginManager;
+import net.runelite.client.ui.ClientToolbar;
 import net.runelite.client.ui.JagexColors;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ColorUtil;
 import net.runelite.client.util.HotkeyListener;
+import net.runelite.client.util.ImageUtil;
 import net.runelite.client.util.Text;
 import net.runelite.client.util.WorldUtil;
 import net.runelite.http.api.worlds.World;
@@ -138,6 +142,11 @@ public class TogOptimizerPlugin extends Plugin
 
 	@Inject
 	private BowlReward bowlReward;
+
+	@Inject
+	private ClientToolbar clientToolbar;
+	private volatile TearsPanel sidebar;
+	private NavigationButton navigation;
 
 	@Inject
 	private Notifier notifier;
@@ -256,6 +265,14 @@ public class TogOptimizerPlugin extends Plugin
 	@Override
 	protected void startUp()
 	{
+		sidebar = new TearsPanel(() -> clientThread.invokeLater(this::refreshSidebar));
+		navigation = NavigationButton.builder()
+			.tooltip("Tears of Guthix Optimizer")
+			.icon(ImageUtil.loadImageResource(TogOptimizerPlugin.class, "sidebar.png"))
+			.priority(6)
+			.panel(sidebar)
+			.build();
+		clientToolbar.addNavigation(navigation);
 		clientThread.invoke(this::checkHotkeyConflict);
 		overlayManager.add(wallOverlay);
 		overlayManager.add(junaOverlay);
@@ -265,6 +282,9 @@ public class TogOptimizerPlugin extends Plugin
 	@Override
 	protected void shutDown()
 	{
+		sidebar = null;
+		clientToolbar.removeNavigation(navigation);
+		navigation = null;
 		clearVisitSession();
 		overlayManager.remove(wallOverlay);
 		overlayManager.remove(junaOverlay);
@@ -349,6 +369,26 @@ public class TogOptimizerPlugin extends Plugin
 		requirement = null;
 		requirementCertain = false;
 		rewardLine = null;
+		TearsPanel panel = sidebar;
+		if (panel != null)
+		{
+			SwingUtilities.invokeLater(() -> panel.update(WeeklyReminder.Summary.NO_PROFILE, null));
+		}
+	}
+
+	private void refreshSidebar()
+	{
+		TearsPanel panel = sidebar;
+		if (panel == null || !panel.isPanelActive())
+		{
+			return;
+		}
+		WeeklyReminder.Summary reset = weeklyReminder.summary();
+		boolean canPreview = reset != WeeklyReminder.Summary.NO_PROFILE
+			&& client.getWorldType().contains(net.runelite.api.WorldType.MEMBERS);
+		boolean live = canPreview && playerInRoom() && client.getVarbitValue(VarbitID.DTTD_COLLECTING_TEARS) == 0;
+		BowlReward.Estimate estimate = canPreview ? bowlReward.projection(live, null, false) : null;
+		SwingUtilities.invokeLater(() -> panel.update(reset, estimate));
 	}
 
 	@Subscribe
@@ -639,6 +679,7 @@ public class TogOptimizerPlugin extends Plugin
 		{
 			notifier.notify(reminder, alert);
 		}
+		refreshSidebar();
 		// The summary comes as the game's time runs out, while the player is led out of the room
 		if (record.start >= 0 && !record.isOver() && client.getTickCount() >= record.start + record.length + GameRecord.END_LAG)
 		{

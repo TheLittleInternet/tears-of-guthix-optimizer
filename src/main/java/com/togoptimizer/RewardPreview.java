@@ -35,6 +35,7 @@ final class RewardPreview
 	final Skill skill;
 	private final int xpToCap;
 	private final int hundredthsPerTear;
+	private final String displayRate;
 
 	private RewardPreview(Skill skill, int skillXp, boolean hardDiary)
 	{
@@ -43,6 +44,8 @@ final class RewardPreview
 		// Base XP rises by one tenth per 27 skill XP. The diary adds 10% to the bowl.
 		int tenthsPerTear = Math.min(600, 100 + skillXp / 27);
 		hundredthsPerTear = tenthsPerTear * (hardDiary ? 11 : 10);
+		long cappedRate = Math.min(hundredthsPerTear, (long) xpToCap * 100);
+		displayRate = BigDecimal.valueOf(cappedRate, 2).stripTrailingZeros().toPlainString();
 	}
 
 	/** Call on the client thread. Special game modes have different XP or skill rules. */
@@ -118,7 +121,6 @@ final class RewardPreview
 	/** Displayable XP rate for one tear, including the diary bonus and remaining capacity. */
 	String perTear()
 	{
-		long hundredths = Math.min(hundredthsPerTear, (long) xpToCap * 100);
-		return BigDecimal.valueOf(hundredths, 2).stripTrailingZeros().toPlainString();
+		return displayRate;
 	}
 }

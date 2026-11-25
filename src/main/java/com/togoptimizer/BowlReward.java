@@ -4,6 +4,7 @@ import java.util.Locale;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import net.runelite.api.Client;
+import net.runelite.api.Skill;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.config.ConfigManager;
 
@@ -57,9 +58,16 @@ final class BowlReward
 		reset();
 	}
 
-	/** Read skill and quest state on the client thread, never while drawing the overlay. */
 	@Nullable
 	String estimate(boolean inRoom, @Nullable Integer requestedCount, boolean refresh)
+	{
+		Estimate result = projection(inRoom, requestedCount, refresh);
+		return result == null ? null : result.line();
+	}
+
+	/** Read on the client thread. The returned estimate can also be used by Swing. */
+	@Nullable
+	Estimate projection(boolean inRoom, @Nullable Integer requestedCount, boolean refresh)
 	{
 		int tick = client.getTickCount();
 		if (refresh || tick >= nextSkillCheck)
@@ -77,27 +85,74 @@ final class BowlReward
 		return estimateFor(skill, requestedCount, current, previous);
 	}
 
-	static String estimateFor(RewardPreview skill, @Nullable Integer requested, @Nullable Integer current, @Nullable Integer previous)
+	static Estimate estimateFor(RewardPreview skill, @Nullable Integer requested, @Nullable Integer current,
+		@Nullable Integer previous)
 	{
 		if (requested != null)
 		{
-			return format(skill, requested, "requested");
+			return new Estimate(skill, Basis.CUSTOM, requested);
 		}
 		if (current != null)
 		{
-			return format(skill, current, "in your bowl");
+			return new Estimate(skill, Basis.CURRENT, current);
 		}
 		if (previous != null && previous >= 0)
 		{
-			return format(skill, previous, "to match last game");
+			return new Estimate(skill, Basis.LAST, previous);
 		}
-		return skill.perTear() + " " + skill.skill.getName() + " XP/tear";
+		return new Estimate(skill, Basis.RATE, null);
 	}
 
-	static String format(RewardPreview reward, int tears, String basis)
+	enum Basis
 	{
-		return String.format(Locale.ENGLISH, "~%,d %s XP (%,d %s %s)", reward.xpFor(tears),
-			reward.skill.getName(), tears, tears == 1 ? "tear" : "tears", basis);
+		CURRENT("in your bowl"),
+		LAST("to match last game"),
+		CUSTOM("requested"),
+		RATE("");
+
+		private final String description;
+
+		Basis(String description)
+		{
+			this.description = description;
+		}
+	}
+
+	static final class Estimate
+	{
+		private final RewardPreview reward;
+		final Skill skill;
+		final String perTear;
+		final Basis basis;
+		@Nullable
+		final Integer tears;
+		@Nullable
+		final Integer xp;
+
+		private Estimate(RewardPreview reward, Basis basis, @Nullable Integer tears)
+		{
+			this.reward = reward;
+			this.skill = reward.skill;
+			this.perTear = reward.perTear();
+			this.basis = basis;
+			this.tears = tears;
+			this.xp = tears == null ? null : reward.xpFor(tears);
+		}
+
+		Estimate forCount(int count)
+		{
+			return new Estimate(reward, Basis.CUSTOM, count);
+		}
+
+		String line()
+		{
+			if (tears == null)
+			{
+				return perTear + " " + skill.getName() + " XP/tear";
+			}
+			return String.format(Locale.ENGLISH, "~%,d %s XP (%,d %s %s)", xp,
+				skill.getName(), tears, tears == 1 ? "tear" : "tears", basis.description);
+		}
 	}
 
 	/** Keeps the final visible count until the local player's drinking animation. */

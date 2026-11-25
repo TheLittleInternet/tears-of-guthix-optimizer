@@ -3,7 +3,10 @@ package com.togoptimizer;
 import java.time.DateTimeException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import javax.annotation.Nullable;
 import javax.inject.Inject;
 import net.runelite.api.ChatMessageType;
@@ -30,6 +33,53 @@ final class WeeklyReminder
 	private static final String NOTICE = "lastReadyNoticeDay";
 	private static final String READY = "You can play Tears of Guthix now.";
 	private static final String USAGE = "Use ::togstatus, ::togstatus sync DAYS XP (both remaining in your quest journal), or ::togstatus last YYYY-MM-DD (UTC).";
+
+	static final class Summary
+	{
+		private static final DateTimeFormatter LOCAL = DateTimeFormatter.ofPattern("EEE, MMM d · h:mm a z", Locale.ENGLISH);
+		private static final DateTimeFormatter UTC = DateTimeFormatter.ofPattern("EEE, MMM d, uuuu · HH:mm 'UTC'", Locale.ENGLISH)
+			.withZone(ZoneOffset.UTC);
+		static final Summary NO_PROFILE = new Summary("Waiting for character", "Log in to see your weekly reset.");
+		private static final Summary WORLD = new Summary("Members' world required", "Weekly reminders are available on regular members' worlds.");
+		private static final Summary LOADING = new Summary("Loading character", "Your character is loading. Try again in a moment.");
+		private static final Summary QUEST = new Summary("Quest required", "Complete the Tears of Guthix quest to play.");
+		private static final Summary UNKNOWN = new Summary("Last visit unknown",
+			"Enter ::togstatus sync DAYS XP using the remaining days and XP from your quest journal.");
+		private static final Summary READY_NOW = new Summary("Ready to play", "Talk to Juna to collect your tears.", null, null, true);
+
+		final String headline;
+		final String details;
+		@Nullable final String resetTime;
+		@Nullable final String resetUtc;
+		final boolean ready;
+
+		private Summary(String headline, String details)
+		{
+			this(headline, details, null, null, false);
+		}
+
+		private Summary(String headline, String details, @Nullable String resetTime, @Nullable String resetUtc, boolean ready)
+		{
+			this.headline = headline;
+			this.details = details;
+			this.resetTime = resetTime;
+			this.resetUtc = resetUtc;
+			this.ready = ready;
+		}
+
+		static Summary forVisit(long unlock, long now, @Nullable String needed, ZoneId localZone)
+		{
+			if (now >= unlock)
+			{
+				// Login chat and a journal showing zero days only establish that the wait has already elapsed.
+				return needed == null ? READY_NOW : new Summary("Weekly wait complete", needed + ".");
+			}
+			Instant reset = Instant.ofEpochMilli(unlock);
+			return new Summary("Resets in " + Eligibility.formatRemaining(unlock - now),
+				needed == null ? "XP or quest point requirement met." : needed + ".",
+				LOCAL.format(reset.atZone(localZone)), UTC.format(reset), false);
+		}
+	}
 
 	private final Client client;
 	private final ConfigManager config;
@@ -246,27 +296,50 @@ final class WeeklyReminder
 	}
 
 	@Nullable
-	String status()
+	private Summary unavailable()
 	{
 		if (!loadProfile())
 		{
-			return null;
+			return Summary.NO_PROFILE;
 		}
 		if (!normalMembersWorld())
 		{
-			return "Weekly reminders are available on regular members' worlds.";
+			return Summary.WORLD;
 		}
 		if (client.getOverallExperience() <= 0)
 		{
-			return "Your character is loading. Try again in a moment.";
+			return Summary.LOADING;
 		}
 		if (!questFinished())
 		{
-			return "Complete the Tears of Guthix quest to play.";
+			return Summary.QUEST;
 		}
-		if (unlock == null)
+		return unlock == null ? Summary.UNKNOWN : null;
+	}
+
+	/** Read on the client thread while the sidebar is visible. Does not send or consume the ready alert. */
+	Summary summary()
+	{
+		Summary unavailable = unavailable();
+		return unavailable != null ? unavailable : Summary.forVisit(unlock, System.currentTimeMillis(),
+			progressRequirement(), ZoneId.systemDefault());
+	}
+
+	@Nullable
+	String status()
+	{
+		Summary unavailable = unavailable();
+		if (unavailable == Summary.NO_PROFILE)
+		{
+			return null;
+		}
+		if (unavailable == Summary.UNKNOWN)
 		{
 			return "Your last visit is unknown. " + USAGE;
+		}
+		if (unavailable != null)
+		{
+			return unavailable.details;
 		}
 		String needed = progressRequirement();
 		long now = System.currentTimeMillis();
