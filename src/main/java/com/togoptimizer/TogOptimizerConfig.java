@@ -8,6 +8,7 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Keybind;
+import net.runelite.client.config.Notification;
 
 @ConfigGroup(TogOptimizerConfig.GROUP)
 public interface TogOptimizerConfig extends Config
@@ -228,6 +229,32 @@ public interface TogOptimizerConfig extends Config
 	default boolean hopLeftClick()
 	{
 		return false;
+	}
+
+	@ConfigItem(
+		keyName = "showReward",
+		name = "Show XP reward",
+		description = "Shows the skill and estimated XP above Juna using your last bowl before a run and your "
+			+ "current tears during it. Use ::togxp anywhere to check.",
+		position = 8,
+		section = juna
+	)
+	default boolean showReward()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+		keyName = "readyReminder",
+		name = "Weekly reminder",
+		description = "Sends a RuneLite notification when your weekly wait is over. Use ::togstatus to check "
+			+ "from anywhere or sync your quest journal.",
+		position = 9,
+		section = juna
+	)
+	default Notification readyReminder()
+	{
+		return Notification.OFF;
 	}
 
 	@ConfigItem(

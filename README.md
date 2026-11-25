@@ -30,6 +30,13 @@ whether the world has the best stream order, when to enter, and when you can pla
   so your game starts at a good point in the stream cycle.
 - **Next game.** Shows above Juna how long until you can play again, and optionally the quest point or
   experience still needed.
+- **Weekly reminder** (off by default). Turn this on in the Juna settings for a RuneLite notification
+  when you can play again. Enter `::togstatus` anywhere to check your character's weekly wait and XP
+  or quest point progress.
+- **XP reward.** Shows the skill Juna would train and the XP per tear. After a tracked run it estimates
+  the reward for matching your previous bowl if the final count was clear. During a run it uses the
+  tears currently in your bowl.
+  Enter `::togxp` to check from anywhere, or `::togxp 150` for an estimate at 150 tears.
 - **World suggestions** (off by default). Suggests nearby worlds with the best stream order. A hotkey
   (Ctrl+Shift+Up) or Juna's Hop-to option hops to the first one, and Hop-to can be made her left-click.
 - **Expected tears** (off by default). Shows how many tears the highlighted wall is expected to give
@@ -43,6 +50,19 @@ The plugin tracks every stream, plays out possible futures from the current mome
 the choice that collects the most tears on average. Walking and start-up times were measured in game.
 
 It works alongside RuneLite's built-in Tears of Guthix plugin, so its stream timers can stay on.
+
+## Tracking a previous visit
+
+The plugin records a visit when your character drinks the bowl. If you played on mobile or installed
+the plugin after your last run, open **Quest List → Tears of Guthix**. For a journal showing three
+days and 25,000 XP remaining, enter `::togstatus sync 3 25000`. Use zero for either requirement
+the journal says you have met. If you only know the UTC date of your visit, enter
+`::togstatus last YYYY-MM-DD`. Your character's reminder and XP estimates work with online world
+lookup turned off.
+
+XP previews apply to ordinary OSRS worlds and include skill unlocks, the hard Lumbridge & Draynor
+Diary bonus and the 200 million XP cap. RuneLite reports whole skill XP, so a fractional tie can
+affect which skill is predicted.
 
 ## Online world list
 
